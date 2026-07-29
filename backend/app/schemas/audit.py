@@ -19,6 +19,15 @@ class RiskSeverity(str, enum.Enum):
     CRITICAL = "CRITICAL"
 
 
+class AuditStatus(str, enum.Enum):
+    """Matches the Postgres `AuditStatus` enum."""
+
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    READY = "READY"
+    FAILED = "FAILED"
+
+
 class AuditCreate(BaseModel):
     document_id: uuid.UUID
     framework: str = Field(..., min_length=1, max_length=64)
@@ -38,5 +47,13 @@ class AuditOut(BaseModel):
     document_title: str | None = None
     organization_id: uuid.UUID
     framework: str
+    status: AuditStatus
+    error_message: str | None = None
     created_at: datetime
     findings: List[AuditFindingOut] = Field(default_factory=list)
+
+
+class AuditStatusOut(BaseModel):
+    id: uuid.UUID
+    status: AuditStatus
+    error_message: str | None = None

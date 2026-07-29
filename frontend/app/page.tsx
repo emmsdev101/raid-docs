@@ -358,7 +358,10 @@ export default function DashboardPage() {
                     className="p-5 hover:bg-surface-2 transition-colors"
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <FrameworkBadge framework={audit.framework} />
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <FrameworkBadge framework={audit.framework} />
+                        <StatusBadge status={audit.status} />
+                      </div>
                       <span className="text-xs text-muted">
                         {relativeTime(audit.created_at)}
                       </span>
@@ -368,11 +371,17 @@ export default function DashboardPage() {
                     </div>
                     <div className="mt-3 flex items-center gap-3 text-xs">
                       <div className="text-muted">
-                        {audit.findings.length} finding
-                        {audit.findings.length === 1 ? "" : "s"}
+                        {audit.status === "PENDING" ||
+                        audit.status === "PROCESSING"
+                          ? "Analysis in progress…"
+                          : audit.status === "FAILED"
+                            ? "Failed"
+                            : `${audit.findings.length} finding${
+                                audit.findings.length === 1 ? "" : "s"
+                              }`}
                       </div>
                     </div>
-                    {worst && (
+                    {worst && audit.status === "READY" && (
                       <div className="mt-3 rounded-lg border border-border bg-bg p-3">
                         <div className="flex items-center gap-2 mb-1">
                           <SeverityBadge severity={worst.severity} size="sm" />

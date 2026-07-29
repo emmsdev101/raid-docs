@@ -20,6 +20,8 @@ import {
 } from "../../lib/api";
 import { formatBytes, formatDateTime, severityRank } from "../../lib/format";
 
+const FRAMEWORKS = ["GDPR", "SOC2", "HIPAA"] as const;
+
 export default function DocumentDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -30,6 +32,9 @@ export default function DocumentDetailPage() {
   const [audits, setAudits] = useState<ApiAudit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [framework, setFramework] = useState<string>("GDPR");
+  const [running, setRunning] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token || !id) return;
@@ -64,6 +69,24 @@ export default function DocumentDetailPage() {
 
   const relatedAudits = useMemo(() => audits, [audits]);
 
+  async function handleRunAudit() {
+    if (!token || !id || !doc || doc.status !== "READY" || running) return;
+    setRunning(true);
+    setRunError(null);
+    try {
+      const audit = await api.createAudit(token, {
+        document_id: id,
+        framework,
+      });
+      router.push(`/audits/${audit.id}`);
+    } catch (err) {
+      setRunError(
+        err instanceof ApiError ? err.message : "Failed to start audit",
+      );
+      setRunning(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -92,6 +115,8 @@ export default function DocumentDetailPage() {
     );
   }
 
+  const canAudit = doc.status === "READY";
+
   return (
     <div>
       <PageHeader
@@ -117,7 +142,6 @@ export default function DocumentDetailPage() {
       />
 
       <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Metadata */}
         <Card>
           <div className="grid grid-cols-2 md:grid-cols-5 divide-x divide-border">
             <div className="px-5 py-4">
@@ -167,7 +191,6 @@ export default function DocumentDetailPage() {
         </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Chunks */}
           <Card className="lg:col-span-2">
             <CardHeader
               title="Indexed chunks"
@@ -187,8 +210,56 @@ export default function DocumentDetailPage() {
             </div>
           </Card>
 
-          {/* Sidebar */}
           <div className="space-y-6">
+            <Card>
+              <CardHeader
+                title="Run compliance audit"
+                description="Map this document against a regulatory framework."
+              />
+              <div className="px-5 pb-5 space-y-3">
+                <label className="block">
+                  <span className="text-[11px] font-medium uppercase tracking-wider text-muted">
+                    Framework
+                  </span>
+                  <select
+                    value={framework}
+                    onChange={(e) => setFramework(e.target.value)}
+                    disabled={!canAudit || running}
+                    className="mt-1.5 w-full h-9 rounded-lg border border-border bg-surface px-3 text-sm disabled:opacity-50"
+                  >
+                    {FRAMEWORKS.map((f) => (
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  onClick={handleRunAudit}
+                  disabled={!canAudit || running}
+                  className="w-full h-9 inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-white text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {running ? (
+                    <>
+                      <div className="h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                      Starting…
+                    </>
+                  ) : (
+                    "Run audit"
+                  )}
+                </button>
+                {!canAudit && (
+                  <p className="text-[11px] text-muted">
+                    Document must be Ready before you can run an audit.
+                  </p>
+                )}
+                {runError && (
+                  <p className="text-[11px] text-danger">{runError}</p>
+                )}
+              </div>
+            </Card>
+
             <Card>
               <CardHeader
                 title="Related audits"
@@ -215,12 +286,18 @@ export default function DocumentDetailPage() {
                         >
                           <div className="flex items-center justify-between mb-1.5">
                             <FrameworkBadge framework={a.framework} />
-                            <span className="text-xs text-muted tabular-nums">
-                              {a.findings.length} finding
-                              {a.findings.length === 1 ? "" : "s"}
-                            </span>
+                            <StatusBadge status={a.status} />
                           </div>
-                          {worst && (
+                          <div className="text-xs text-muted tabular-nums">
+                            {a.status === "READY"
+                              ? `${a.findings.length} finding${
+                                  a.findings.length === 1 ? "" : "s"
+                                }`
+                              : a.status === "FAILED"
+                                ? "Analysis failed"
+                                : "Analysis in progress"}
+                          </div>
+                          {worst && a.status === "READY" && (
                             <div className="mt-1.5 flex items-center gap-2">
                               <span className="text-[11px] text-muted">
                                 Worst:

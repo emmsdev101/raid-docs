@@ -1,8 +1,12 @@
-import type { DocStatus, RiskSeverity, Role } from "../lib/api";
+import type { AuditStatus, DocStatus, RiskSeverity, Role } from "../lib/api";
 
-export function StatusBadge({ status }: { status: DocStatus }) {
+export function StatusBadge({
+  status,
+}: {
+  status: DocStatus | AuditStatus;
+}) {
   const config: Record<
-    DocStatus,
+    DocStatus | AuditStatus,
     { label: string; bg: string; text: string; dot: string }
   > = {
     PENDING: {

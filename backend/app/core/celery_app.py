@@ -10,7 +10,7 @@ celery_app = Celery(
     "raid_docs",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
-    include=["app.tasks.ingestion", "app.tasks.sweep"],
+    include=["app.tasks.ingestion", "app.tasks.sweep", "app.tasks.audit"],
 )
 
 celery_app.conf.update(

@@ -12,6 +12,7 @@
 
 export type Role = "ADMIN" | "MEMBER" | "VIEWER";
 export type DocStatus = "PENDING" | "PROCESSING" | "READY" | "FAILED";
+export type AuditStatus = "PENDING" | "PROCESSING" | "READY" | "FAILED";
 export type RiskSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
 export type ApiUser = {
@@ -58,8 +59,16 @@ export type ApiAudit = {
   document_title: string | null;
   organization_id: string;
   framework: string;
+  status: AuditStatus;
+  error_message: string | null;
   created_at: string;
   findings: ApiAuditFinding[];
+};
+
+export type ApiAuditStatus = {
+  id: string;
+  status: AuditStatus;
+  error_message: string | null;
 };
 
 export type ApiCitation = {
@@ -282,6 +291,13 @@ export const api = {
   },
   getAudit(token: string, id: string, signal?: AbortSignal): Promise<ApiAudit> {
     return request<ApiAudit>(`/audits/${id}`, { token, signal });
+  },
+  getAuditStatus(
+    token: string,
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<ApiAuditStatus> {
+    return request<ApiAuditStatus>(`/audits/${id}/status`, { token, signal });
   },
   createAudit(
     token: string,

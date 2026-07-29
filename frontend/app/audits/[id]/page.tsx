@@ -5,7 +5,11 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { PageHeader } from "../../components/PageHeader";
-import { FrameworkBadge, SeverityBadge } from "../../components/Badges";
+import {
+  FrameworkBadge,
+  SeverityBadge,
+  StatusBadge,
+} from "../../components/Badges";
 import { Card, CardHeader } from "../../components/Card";
 import { FindingRow } from "../../components/FindingRow";
 import { useAuth } from "../../lib/auth-context";
@@ -16,6 +20,8 @@ import {
   type RiskSeverity,
 } from "../../lib/api";
 import { formatDateTime, severityRank } from "../../lib/format";
+
+const IN_FLIGHT = new Set(["PENDING", "PROCESSING"]);
 
 export default function AuditDetailPage() {
   const params = useParams<{ id: string }>();
@@ -30,6 +36,8 @@ export default function AuditDetailPage() {
   useEffect(() => {
     if (!token || !id) return;
     const controller = new AbortController();
+    setLoading(true);
+
     api
       .getAudit(token, id, controller.signal)
       .then((row) => {
@@ -49,6 +57,29 @@ export default function AuditDetailPage() {
       });
     return () => controller.abort();
   }, [token, id]);
+
+  // Poll while the LLM auditor is still running.
+  useEffect(() => {
+    if (!token || !id || !audit || !IN_FLIGHT.has(audit.status)) return;
+
+    const controller = new AbortController();
+    const timer = window.setInterval(() => {
+      api
+        .getAudit(token, id, controller.signal)
+        .then((row) => {
+          if (controller.signal.aborted) return;
+          setAudit(row);
+        })
+        .catch(() => {
+          /* keep showing last known state while polling */
+        });
+    }, 2500);
+
+    return () => {
+      controller.abort();
+      window.clearInterval(timer);
+    };
+  }, [token, id, audit?.status]);
 
   const findings = useMemo(
     () =>
@@ -103,6 +134,8 @@ export default function AuditDetailPage() {
     );
   }
 
+  const inFlight = IN_FLIGHT.has(audit.status);
+
   return (
     <div>
       <PageHeader
@@ -121,7 +154,10 @@ export default function AuditDetailPage() {
               <div className="text-[11px] text-muted uppercase tracking-wider mb-2">
                 Framework
               </div>
-              <FrameworkBadge framework={audit.framework} />
+              <div className="flex items-center gap-2">
+                <FrameworkBadge framework={audit.framework} />
+                <StatusBadge status={audit.status} />
+              </div>
               <div className="mt-4 text-[11px] text-muted uppercase tracking-wider">
                 Run at
               </div>
@@ -141,8 +177,13 @@ export default function AuditDetailPage() {
                 {audit.document_title ?? "Untitled document"}
               </Link>
               <div className="mt-3 text-[11px] text-muted">
-                {audit.findings.length} finding
-                {audit.findings.length === 1 ? "" : "s"} recorded
+                {inFlight
+                  ? "Findings will appear when analysis completes"
+                  : audit.status === "FAILED"
+                    ? "Analysis did not complete"
+                    : `${audit.findings.length} finding${
+                        audit.findings.length === 1 ? "" : "s"
+                      } recorded`}
               </div>
             </div>
 
@@ -173,7 +214,25 @@ export default function AuditDetailPage() {
             title={`Findings (${findings.length})`}
             description="Sorted by severity. Expand each finding to review evidence and recommended remediation."
           />
-          {findings.length === 0 ? (
+          {inFlight ? (
+            <div className="px-5 py-12 text-center">
+              <div className="inline-flex items-center gap-2 text-sm text-muted">
+                <div className="h-4 w-4 rounded-full border-2 border-border border-t-primary animate-spin" />
+                Analyzing document against {audit.framework}…
+              </div>
+              <p className="mt-3 text-xs text-muted">
+                This usually takes a minute depending on document size and the local model.
+              </p>
+            </div>
+          ) : audit.status === "FAILED" ? (
+            <div className="px-5 py-10 text-center space-y-2">
+              <p className="text-sm font-medium text-danger">Audit failed</p>
+              <p className="text-sm text-muted max-w-lg mx-auto">
+                {audit.error_message ??
+                  "The compliance auditor could not complete analysis."}
+              </p>
+            </div>
+          ) : findings.length === 0 ? (
             <div className="px-5 py-10 text-center text-sm text-muted">
               This audit produced no findings.
             </div>
